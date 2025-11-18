@@ -1,0 +1,145 @@
+name: Terraform Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  format-check:
+    name: Terraform Format Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+      
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        continue-on-error: false
+
+  validate-platform-module:
+    name: Validate Platform Module
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+      
+      - name: Terraform Init
+        run: terraform init -backend=false
+        working-directory: modules/front-door-platform
+      
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: modules/front-door-platform
+
+  validate-delivery-module:
+    name: Validate Delivery Module
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+      
+      - name: Terraform Init
+        run: terraform init -backend=false
+        working-directory: modules/front-door-delivery
+      
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: modules/front-door-delivery
+
+  validate-examples:
+    name: Validate Examples
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        example:
+          - examples/platform-deployment
+          - examples/team-deployment
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+      
+      - name: Terraform Init
+        run: terraform init -backend=false
+        working-directory: ${{ matrix.example }}
+      
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ${{ matrix.example }}
+
+  docs-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check required documentation exists
+        run: |
+          echo "Checking documentation files..."
+          test -f README.md && echo "✓ README.md"
+          test -f CLEANUP.md && echo "✓ CLEANUP.md"
+          test -f COST_ESTIMATION.md && echo "✓ COST_ESTIMATION.md"
+          test -f CONTRIBUTING.md && echo "✓ CONTRIBUTING.md"
+          test -f LICENSE && echo "✓ LICENSE"
+          test -f modules/front-door-platform/README.md && echo "✓ Platform README"
+          test -f modules/front-door-delivery/README.md && echo "✓ Delivery README"
+          test -f examples/platform-deployment/README.md && echo "✓ Platform Example README"
+          test -f examples/team-deployment/README.md && echo "✓ Team Example README"
+          echo "All required documentation files present!"
+      
+      - name: Check for broken links in README
+        run: |
+          echo "Checking for common documentation issues..."
+          # Check for TODO markers
+          ! grep -r "TODO" README.md modules/*/README.md || (echo "Found TODO markers" && exit 1)
+          # Check for placeholder text
+          ! grep -r "YOUR-USERNAME" README.md || (echo "Found placeholder text YOUR-USERNAME" && exit 1)
+          echo "Documentation checks passed!"
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'

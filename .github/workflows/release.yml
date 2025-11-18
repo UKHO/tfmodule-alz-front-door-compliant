@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## Changes in this release
+            ${{ steps.changelog.outputs.CHANGELOG }}
+            
+            ## Usage
+            
+            ```hcl
+            # Platform Module
+            module "front_door_platform" {
+              source  = "github.com/YOUR-USERNAME/tfmodule-alz-front-door-compliant//modules/front-door-platform?ref=v${{ steps.get_version.outputs.VERSION }}"
+              # ... configuration
+            }
+            
+            # Delivery Module
+            module "front_door_delivery" {
+              source  = "github.com/YOUR-USERNAME/tfmodule-alz-front-door-compliant//modules/front-door-delivery?ref=v${{ steps.get_version.outputs.VERSION }}"
+              # ... configuration
+            }
+            ```
+          draft: false
+          prerelease: false
