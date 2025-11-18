@@ -889,7 +889,6 @@ Please follow organizational standards for contributions and ensure all changes 
 
 ### GitHub Actions (Validation & Quality)
 Automated checks on every push and pull request:
-- ✅ Terraform formatting validation
 - ✅ Terraform syntax validation
 - ✅ Documentation completeness check
 - ✅ Security scanning (Trivy)
