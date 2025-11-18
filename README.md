@@ -2,7 +2,7 @@
 
 [![Terraform](https://img.shields.io/badge/terraform-%3E%3D1.0-blue.svg)](https://www.terraform.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Validation](https://github.com/YOUR-USERNAME/tfmodule-alz-front-door-compliant/actions/workflows/terraform-validate.yml/badge.svg)](https://github.com/YOUR-USERNAME/tfmodule-alz-front-door-compliant/actions)
+[![Validation](https://github.com/ukho/tfmodule-alz-front-door-compliant/actions/workflows/terraform-validate.yml/badge.svg)](https://github.com/ukho/tfmodule-alz-front-door-compliant/actions)
 
 This repository contains two Terraform modules for managing Azure Front Door infrastructure with proper separation of concerns:
 
