@@ -32,3 +32,8 @@ output "sku_name" {
   description = "The SKU name of the Front Door profile."
   value       = azurerm_cdn_frontdoor_profile.this.sku_name
 }
+
+output "secret_ids" {
+  description = "A map of Front Door secret IDs keyed by the secrets map key. Pass these to the delivery module's custom_domains[*].tls.cdn_frontdoor_secret_id when using CustomerCertificate TLS."
+  value       = { for k, v in azurerm_cdn_frontdoor_secret.this : k => v.id }
+}

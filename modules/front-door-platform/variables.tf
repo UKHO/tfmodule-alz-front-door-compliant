@@ -119,6 +119,15 @@ variable "shared_endpoints" {
   }))
 }
 
+variable "secrets" {
+  description = "A map of Key Vault certificates to import as Front Door secrets. Referenced by custom domains using certificate_type = \"CustomerCertificate\"."
+  type = map(object({
+    name                     = string
+    key_vault_certificate_id = string
+  }))
+  default = {}
+}
+
 variable "tags" {
   description = "A mapping of tags to assign to the resources."
   type        = map(string)
