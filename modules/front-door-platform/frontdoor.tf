@@ -4,6 +4,10 @@ resource "azurerm_cdn_frontdoor_profile" "this" {
   sku_name            = var.sku_name
   tags                = var.tags
 
+  identity {
+    type = "SystemAssigned"
+  }
+
   timeouts {
     create = "90m"  # Front Door can take a long time to create
     update = "90m"
