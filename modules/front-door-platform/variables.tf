@@ -119,6 +119,18 @@ variable "shared_endpoints" {
   }))
 }
 
+variable "key_vault_name" {
+  description = "The name of the Key Vault containing certificates for Front Door secrets. Used to grant the Front Door managed identity the Key Vault Secrets User role."
+  type        = string
+  default     = null
+}
+
+variable "key_vault_resource_group_name" {
+  description = "The resource group containing the Key Vault. Defaults to the shared connectivity resource group."
+  type        = string
+  default     = "m-spokeconnect-uksouth-rg"
+}
+
 variable "secrets" {
   description = "A map of Key Vault certificates to import as Front Door secrets. Referenced by custom domains using certificate_type = \"CustomerCertificate\"."
   type = map(object({

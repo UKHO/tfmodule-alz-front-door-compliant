@@ -4,11 +4,23 @@
 #
 # Prerequisites:
 #   - The Front Door profile's system-assigned managed identity (created in
-#     frontdoor.tf) must have "Key Vault Certificate User" (or at minimum
-#     "Key Vault Secrets User") on the Key Vault, so Front Door can read the
-#     certificate.
+#     frontdoor.tf) must have "Key Vault Secrets User" on the Key Vault,
+#     so Front Door can read the certificate. This is granted below.
 #   - Pass the *versioned* Key Vault certificate ID to pin a specific version,
 #     or the *versionless* ID to always use the latest version.
+
+data "azurerm_key_vault" "frontdoor" {
+  count               = var.key_vault_name != null ? 1 : 0
+  name                = var.key_vault_name
+  resource_group_name = var.key_vault_resource_group_name
+}
+
+resource "azurerm_role_assignment" "frontdoor_kv_secrets_user" {
+  count                = var.key_vault_name != null ? 1 : 0
+  scope                = data.azurerm_key_vault.frontdoor[0].id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_cdn_frontdoor_profile.this.identity[0].principal_id
+}
 
 resource "azurerm_cdn_frontdoor_secret" "this" {
   for_each = var.secrets
