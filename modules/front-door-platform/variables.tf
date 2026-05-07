@@ -128,7 +128,6 @@ variable "key_vault_name" {
 variable "key_vault_resource_group_name" {
   description = "The resource group containing the Key Vault. Defaults to the shared connectivity resource group."
   type        = string
-  default     = "m-spokeconnect-uksouth-rg"
 }
 
 variable "secrets" {
