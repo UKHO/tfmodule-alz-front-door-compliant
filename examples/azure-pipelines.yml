@@ -1,0 +1,139 @@
+# Sample Azure Pipeline for Platform Team Deployment
+# Customize this for your organization's requirements
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - modules/front-door-platform/**
+      - examples/platform-deployment/**
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  - group: terraform-credentials  # Variable group with Azure credentials
+  - name: terraformVersion
+    value: '1.6.0'
+
+stages:
+  - stage: Validate
+    displayName: 'Validate Terraform'
+    jobs:
+      - job: ValidateJob
+        displayName: 'Terraform Validate'
+        pool:
+          vmImage: 'ubuntu-latest'
+        
+        steps:
+          - task: TerraformInstaller@0
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(terraformVersion)
+          
+          - script: terraform fmt -check -recursive
+            displayName: 'Terraform Format Check'
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+          
+          - script: |
+              cd modules/front-door-platform
+              terraform init -backend=false
+              terraform validate
+            displayName: 'Validate Platform Module'
+          
+          - script: |
+              cd modules/front-door-delivery
+              terraform init -backend=false
+              terraform validate
+            displayName: 'Validate Delivery Module'
+
+  - stage: Plan
+    displayName: 'Terraform Plan'
+    dependsOn: Validate
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - job: PlanJob
+        displayName: 'Terraform Plan'
+        pool:
+          vmImage: 'ubuntu-latest'
+        
+        steps:
+          - task: TerraformInstaller@0
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(terraformVersion)
+          
+          - task: AzureCLI@2
+            displayName: 'Terraform Init & Plan'
+            inputs:
+              azureSubscription: 'Platform-ServiceConnection'  # Your service connection
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                cd examples/platform-deployment
+                
+                # Initialize with Azure backend
+                terraform init \
+                  -backend-config="resource_group_name=$(TERRAFORM_STATE_RG)" \
+                  -backend-config="storage_account_name=$(TERRAFORM_STATE_SA)" \
+                  -backend-config="container_name=$(TERRAFORM_STATE_CONTAINER)" \
+                  -backend-config="key=platform-frontdoor.tfstate"
+                
+                # Run plan
+                terraform plan -out=tfplan
+              addSpnToEnvironment: true
+          
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Plan'
+            inputs:
+              targetPath: '$(System.DefaultWorkingDirectory)/examples/platform-deployment/tfplan'
+              artifact: 'terraform-plan'
+
+  - stage: Apply
+    displayName: 'Terraform Apply'
+    dependsOn: Plan
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: ApplyJob
+        displayName: 'Terraform Apply'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'Platform-Production'  # Requires approval
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: TerraformInstaller@0
+                  displayName: 'Install Terraform'
+                  inputs:
+                    terraformVersion: $(terraformVersion)
+                
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download Plan'
+                  inputs:
+                    artifact: 'terraform-plan'
+                    path: '$(System.DefaultWorkingDirectory)/examples/platform-deployment'
+                
+                - task: AzureCLI@2
+                  displayName: 'Terraform Apply'
+                  inputs:
+                    azureSubscription: 'Platform-ServiceConnection'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      cd examples/platform-deployment
+                      
+                      # Initialize with Azure backend
+                      terraform init \
+                        -backend-config="resource_group_name=$(TERRAFORM_STATE_RG)" \
+                        -backend-config="storage_account_name=$(TERRAFORM_STATE_SA)" \
+                        -backend-config="container_name=$(TERRAFORM_STATE_CONTAINER)" \
+                        -backend-config="key=platform-frontdoor.tfstate"
+                      
+                      # Apply the plan
+                      terraform apply -auto-approve tfplan
+                    addSpnToEnvironment: true

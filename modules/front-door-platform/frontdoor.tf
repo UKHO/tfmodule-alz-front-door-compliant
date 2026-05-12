@@ -9,9 +9,9 @@ resource "azurerm_cdn_frontdoor_profile" "this" {
   }
 
   timeouts {
-    create = "90m"  # Front Door can take a long time to create
+    create = "90m" # Front Door can take a long time to create
     update = "90m"
-    delete = "90m"  # Deletions especially can take 30-60 minutes
+    delete = "90m" # Deletions especially can take 30-60 minutes
     read   = "5m"
   }
 }

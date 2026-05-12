@@ -1,5 +1,4 @@
-# Sample Azure Pipeline for Platform Team Deployment
-# Customize this for your organization's requirements
+name: $(Build.BuildId)
 
 trigger:
   branches:
@@ -7,133 +6,118 @@ trigger:
       - main
   paths:
     include:
-      - modules/front-door-platform/**
-      - examples/platform-deployment/**
+      - modules/**
+      - scripts/**
+      - examples/**
 
 pr:
   branches:
     include:
       - main
+  paths:
+    include:
+      - modules/**
+      - scripts/**
+      - examples/**
 
-variables:
-  - group: terraform-credentials  # Variable group with Azure credentials
-  - name: terraformVersion
-    value: '1.6.0'
+resources:
+  containers:
+    - container: TerraformContainer
+      image: ukhydrographicoffice/terraform-test-toolset:latest
 
 stages:
+
+# ─── Stage 1: Validate ────────────────────────────────────────────────────────
+
   - stage: Validate
-    displayName: 'Validate Terraform'
+    displayName: "Stage 1: Validate"
     jobs:
-      - job: ValidateJob
-        displayName: 'Terraform Validate'
-        pool:
-          vmImage: 'ubuntu-latest'
-        
-        steps:
-          - task: TerraformInstaller@0
-            displayName: 'Install Terraform'
-            inputs:
-              terraformVersion: $(terraformVersion)
-          
-          - script: terraform fmt -check -recursive
-            displayName: 'Terraform Format Check'
-            workingDirectory: '$(System.DefaultWorkingDirectory)'
-          
-          - script: |
-              cd modules/front-door-platform
-              terraform init -backend=false
-              terraform validate
-            displayName: 'Validate Platform Module'
-          
-          - script: |
-              cd modules/front-door-delivery
-              terraform init -backend=false
-              terraform validate
-            displayName: 'Validate Delivery Module'
 
-  - stage: Plan
-    displayName: 'Terraform Plan'
+      # ── Static analysis: fmt, lint, validate, docs ──
+
+      - job: StaticChecks
+        displayName: "Static Checks (fmt, lint, validate, docs)"
+        pool:
+          vmImage: ubuntu-latest
+        container: TerraformContainer
+        steps:
+          - checkout: self
+
+          - pwsh: scripts/Invoke-TfFmt.ps1 -TerraformDir modules/
+            displayName: "terraform fmt check"
+
+          - pwsh: scripts/Invoke-TfLint.ps1 -TerraformDir modules/
+            displayName: "TFLint"
+
+          - pwsh: scripts/Invoke-TfValidate.ps1 -ModulesDir modules/
+            displayName: "terraform validate"
+
+          - pwsh: scripts/Invoke-TfDocs.ps1 -ModulesDir modules/
+            displayName: "terraform-docs check"
+
+      # ── Snyk IaC scan: front-door-platform ──
+
+      - job: SnykScanPlatform
+        displayName: "Snyk IaC Scan (front-door-platform)"
+        dependsOn: []
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+
+          - task: UkhoSnykScanTask@0
+            displayName: "Snyk IaC scan — front-door-platform"
+            inputs:
+              failOnIssues: true
+              organization: "f8cb0532-afc8-444d-b6cf-97c0cb941e10"
+              serviceConnectionEndpoint: "Snyk Auth"
+              testType: iac
+              monitorWhen: never
+              severityThreshold: high
+              targetFile: modules/front-door-platform
+
+      # ── Snyk IaC scan: front-door-delivery ──
+
+      - job: SnykScanDelivery
+        displayName: "Snyk IaC Scan (front-door-delivery)"
+        dependsOn: []
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+
+          - task: UkhoSnykScanTask@0
+            displayName: "Snyk IaC scan — front-door-delivery"
+            inputs:
+              failOnIssues: true
+              organization: "f8cb0532-afc8-444d-b6cf-97c0cb941e10"
+              serviceConnectionEndpoint: "Snyk Auth"
+              testType: iac
+              monitorWhen: never
+              severityThreshold: high
+              targetFile: modules/front-door-delivery
+
+# ─── Stage 2: Tag Release ─────────────────────────────────────────────────────
+
+  - stage: TagRelease
+    displayName: "Stage 2: Tag Release"
     dependsOn: Validate
-    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
-    jobs:
-      - job: PlanJob
-        displayName: 'Terraform Plan'
-        pool:
-          vmImage: 'ubuntu-latest'
-        
-        steps:
-          - task: TerraformInstaller@0
-            displayName: 'Install Terraform'
-            inputs:
-              terraformVersion: $(terraformVersion)
-          
-          - task: AzureCLI@2
-            displayName: 'Terraform Init & Plan'
-            inputs:
-              azureSubscription: 'Platform-ServiceConnection'  # Your service connection
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                cd examples/platform-deployment
-                
-                # Initialize with Azure backend
-                terraform init \
-                  -backend-config="resource_group_name=$(TERRAFORM_STATE_RG)" \
-                  -backend-config="storage_account_name=$(TERRAFORM_STATE_SA)" \
-                  -backend-config="container_name=$(TERRAFORM_STATE_CONTAINER)" \
-                  -backend-config="key=platform-frontdoor.tfstate"
-                
-                # Run plan
-                terraform plan -out=tfplan
-              addSpnToEnvironment: true
-          
-          - task: PublishPipelineArtifact@1
-            displayName: 'Publish Plan'
-            inputs:
-              targetPath: '$(System.DefaultWorkingDirectory)/examples/platform-deployment/tfplan'
-              artifact: 'terraform-plan'
-
-  - stage: Apply
-    displayName: 'Terraform Apply'
-    dependsOn: Plan
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
-      - deployment: ApplyJob
-        displayName: 'Terraform Apply'
+      - job: CreateTag
+        displayName: "Create semantic version git tag"
         pool:
-          vmImage: 'ubuntu-latest'
-        environment: 'Platform-Production'  # Requires approval
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - task: TerraformInstaller@0
-                  displayName: 'Install Terraform'
-                  inputs:
-                    terraformVersion: $(terraformVersion)
-                
-                - task: DownloadPipelineArtifact@2
-                  displayName: 'Download Plan'
-                  inputs:
-                    artifact: 'terraform-plan'
-                    path: '$(System.DefaultWorkingDirectory)/examples/platform-deployment'
-                
-                - task: AzureCLI@2
-                  displayName: 'Terraform Apply'
-                  inputs:
-                    azureSubscription: 'Platform-ServiceConnection'
-                    scriptType: 'bash'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      cd examples/platform-deployment
-                      
-                      # Initialize with Azure backend
-                      terraform init \
-                        -backend-config="resource_group_name=$(TERRAFORM_STATE_RG)" \
-                        -backend-config="storage_account_name=$(TERRAFORM_STATE_SA)" \
-                        -backend-config="container_name=$(TERRAFORM_STATE_CONTAINER)" \
-                        -backend-config="key=platform-frontdoor.tfstate"
-                      
-                      # Apply the plan
-                      terraform apply -auto-approve tfplan
-                    addSpnToEnvironment: true
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+            persistCredentials: true
+            fetchDepth: 0
+
+          - pwsh: |
+              $tag = "v$(Build.BuildId)"
+              git config user.email "build@azure-devops"
+              git config user.name  "Azure DevOps"
+              git tag $tag
+              git push origin $tag
+              Write-Host "Tagged release: $tag"
+            displayName: "Tag v$(Build.BuildId)"
