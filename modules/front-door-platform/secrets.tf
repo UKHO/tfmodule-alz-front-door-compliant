@@ -20,6 +20,7 @@ resource "azurerm_role_assignment" "frontdoor_kv_secrets_user" {
   scope                = data.azurerm_key_vault.frontdoor[0].id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_cdn_frontdoor_profile.this.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
 
   depends_on = [azurerm_cdn_frontdoor_profile.this]
 }
