@@ -74,6 +74,7 @@ terraform apply
 
 For questions contact: platform-team@company.com
 
+<!-- Last regenerated: 2026-07-06 -->
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
