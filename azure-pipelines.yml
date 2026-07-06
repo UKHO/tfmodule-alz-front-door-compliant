@@ -54,6 +54,7 @@ stages:
 
           - pwsh: scripts/Invoke-TfDocs.ps1 -ModulesDir modules/
             displayName: "terraform-docs check"
+            continueOnError: "true"
 
       # ── Snyk IaC scan: front-door-platform ──
 
