@@ -16,17 +16,22 @@ data "azurerm_key_vault" "frontdoor" {
 }
 
 resource "azurerm_role_assignment" "frontdoor_kv_secrets_user" {
-  count                = var.key_vault_name != null && try(azurerm_cdn_frontdoor_profile.this.identity[0].principal_id, null) != null ? 1 : 0
+  count                = var.key_vault_name != null ? 1 : 0
   scope                = data.azurerm_key_vault.frontdoor[0].id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_cdn_frontdoor_profile.this.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+
+  depends_on = [azurerm_cdn_frontdoor_profile.this]
 }
 
 resource "azurerm_cdn_frontdoor_secret" "this" {
-  for_each = var.secrets
+  for_each = var.key_vault_name != null ? var.secrets : {}
 
   name                     = each.value.name
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.this.id
+
+  depends_on = [azurerm_role_assignment.frontdoor_kv_secrets_user]
 
   secret {
     customer_certificate {
