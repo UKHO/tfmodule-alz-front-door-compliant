@@ -120,18 +120,19 @@ variable "shared_endpoints" {
 }
 
 variable "key_vault_name" {
-  description = "The name of the Key Vault containing certificates for Front Door secrets. Used to grant the Front Door managed identity the Key Vault Secrets User role."
+  description = "(Optional - Deprecated) The name of the Key Vault containing certificates for Front Door secrets. Only required when using customer-managed certificates instead of AFD-managed certificates. Leave null (default) to use AFD-managed certificates."
   type        = string
   default     = null
 }
 
 variable "key_vault_resource_group_name" {
-  description = "The resource group containing the Key Vault. Defaults to the shared connectivity resource group."
+  description = "(Optional - Deprecated) The resource group containing the Key Vault. Only required when key_vault_name is specified for customer-managed certificates."
   type        = string
+  default     = null
 }
 
 variable "secrets" {
-  description = "A map of Key Vault certificates to import as Front Door secrets. Referenced by custom domains using certificate_type = \"CustomerCertificate\"."
+  description = "(Optional - Deprecated) A map of Key Vault certificates to import as Front Door secrets. Only used with customer-managed certificates. Leave empty (default) to use AFD-managed certificates."
   type = map(object({
     name                     = string
     key_vault_certificate_id = string
