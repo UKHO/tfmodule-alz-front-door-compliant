@@ -371,10 +371,7 @@ module "front_door_advanced" {
       name        = "www-example-com"
       dns_zone_id = azurerm_dns_zone.example.id
       host_name   = "www.example.com"
-      tls = {
-        certificate_type    = "ManagedCertificate"
-        minimum_tls_version = "TLS12"
-      }
+      tls         = {} # Uses defaults: ManagedCertificate with TLS12
     }
   }
 
