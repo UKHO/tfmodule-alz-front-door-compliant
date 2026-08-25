@@ -65,45 +65,42 @@ resource "azurerm_cdn_frontdoor_rule" "this" {
     }
   }
 
-  dynamic "conditions" {
-    for_each = each.value.conditions != null ? [each.value.conditions] : []
-    content {
-      dynamic "remote_address_condition" {
-        for_each = conditions.value.remote_address_condition != null ? [conditions.value.remote_address_condition] : []
-        content {
-          operator         = remote_address_condition.value.operator
-          negate_condition = remote_address_condition.value.negate_condition
-          match_values     = remote_address_condition.value.match_values
-        }
+  conditions {
+    dynamic "remote_address_condition" {
+      for_each = each.value.conditions != null && each.value.conditions.remote_address_condition != null ? [each.value.conditions.remote_address_condition] : []
+      content {
+        operator         = remote_address_condition.value.operator
+        negate_condition = remote_address_condition.value.negate_condition
+        match_values     = remote_address_condition.value.match_values
       }
+    }
 
-      dynamic "request_method_condition" {
-        for_each = conditions.value.request_method_condition != null ? [conditions.value.request_method_condition] : []
-        content {
-          operator         = request_method_condition.value.operator
-          negate_condition = request_method_condition.value.negate_condition
-          match_values     = request_method_condition.value.match_values
-        }
+    dynamic "request_method_condition" {
+      for_each = each.value.conditions != null && each.value.conditions.request_method_condition != null ? [each.value.conditions.request_method_condition] : []
+      content {
+        operator         = request_method_condition.value.operator
+        negate_condition = request_method_condition.value.negate_condition
+        match_values     = request_method_condition.value.match_values
       }
+    }
 
-      dynamic "request_uri_condition" {
-        for_each = conditions.value.request_uri_condition != null ? [conditions.value.request_uri_condition] : []
-        content {
-          operator         = request_uri_condition.value.operator
-          negate_condition = request_uri_condition.value.negate_condition
-          match_values     = request_uri_condition.value.match_values
-          transforms       = request_uri_condition.value.transforms
-        }
+    dynamic "request_uri_condition" {
+      for_each = each.value.conditions != null && each.value.conditions.request_uri_condition != null ? [each.value.conditions.request_uri_condition] : []
+      content {
+        operator         = request_uri_condition.value.operator
+        negate_condition = request_uri_condition.value.negate_condition
+        match_values     = request_uri_condition.value.match_values
+        transforms       = request_uri_condition.value.transforms
       }
+    }
 
-      dynamic "url_path_condition" {
-        for_each = conditions.value.url_path_condition != null ? [conditions.value.url_path_condition] : []
-        content {
-          operator         = url_path_condition.value.operator
-          negate_condition = url_path_condition.value.negate_condition
-          match_values     = url_path_condition.value.match_values
-          transforms       = url_path_condition.value.transforms
-        }
+    dynamic "url_path_condition" {
+      for_each = each.value.conditions != null && each.value.conditions.url_path_condition != null ? [each.value.conditions.url_path_condition] : []
+      content {
+        operator         = url_path_condition.value.operator
+        negate_condition = url_path_condition.value.negate_condition
+        match_values     = url_path_condition.value.match_values
+        transforms       = url_path_condition.value.transforms
       }
     }
   }
