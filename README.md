@@ -390,19 +390,19 @@ module "front_door_advanced" {
       actions = {
         response_header_actions = [
           {
-            header_action = "Append"
-            header_name   = "X-Content-Type-Options"
-            value         = "nosniff"
+            operator     = "Append"
+            header_name  = "X-Content-Type-Options"
+            header_value = "nosniff"
           },
           {
-            header_action = "Append"
-            header_name   = "X-Frame-Options"
-            value         = "SAMEORIGIN"
+            operator     = "Append"
+            header_name  = "X-Frame-Options"
+            header_value = "SAMEORIGIN"
           },
           {
-            header_action = "Append"
-            header_name   = "Strict-Transport-Security"
-            value         = "max-age=31536000; includeSubDomains"
+            operator     = "Append"
+            header_name  = "Strict-Transport-Security"
+            header_value = "max-age=31536000; includeSubDomains"
           }
         ]
       }

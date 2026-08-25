@@ -117,58 +117,56 @@ variable "rules" {
     behavior_on_match = string
     actions = object({
       url_redirect_action = optional(object({
-        redirect_type        = string
-        redirect_protocol    = string
-        destination_hostname = string
-        destination_path     = optional(string)
-        query_string         = optional(string)
-        destination_fragment = optional(string)
+        redirect_type         = string
+        redirect_protocol     = string
+        destination_host_name = string
+        destination_path      = optional(string)
+        query_string          = optional(string)
+        destination_fragment  = optional(string)
       }))
       url_rewrite_action = optional(object({
-        source_pattern          = string
-        destination             = string
-        preserve_unmatched_path = bool
+        source_pattern                  = string
+        destination_path                = string
+        preserve_unmatched_path_enabled = bool
       }))
       route_configuration_override_action = optional(object({
-        origin_group_key    = optional(string)
-        forwarding_protocol = optional(string)
-        cache_behavior      = optional(string)
-        cache_duration      = optional(string)
-        compression_enabled = optional(bool)
+        origin_group_key        = optional(string)
+        forwarding_protocol     = optional(string)
+        cache_behavior          = optional(string)
+        cache_duration          = optional(string)
+        compression_enabled     = optional(bool)
+        query_string_behaviour  = optional(string)
+        query_string_parameters = optional(list(string))
       }))
       request_header_actions = optional(list(object({
-        header_action = string
-        header_name   = string
-        value         = optional(string)
+        operator     = string
+        header_name  = string
+        header_value = optional(string)
       })))
       response_header_actions = optional(list(object({
-        header_action = string
-        header_name   = string
-        value         = optional(string)
+        operator     = string
+        header_name  = string
+        header_value = optional(string)
       })))
     })
     conditions = optional(object({
       remote_address_condition = optional(object({
-        operator         = string
-        negate_condition = bool
-        match_values     = list(string)
+        operator = string
+        values   = list(string)
       }))
       request_method_condition = optional(object({
-        operator         = string
-        negate_condition = bool
-        match_values     = list(string)
+        operator = string
+        values   = list(string)
       }))
-      request_uri_condition = optional(object({
-        operator         = string
-        negate_condition = bool
-        match_values     = list(string)
-        transforms       = optional(list(string))
+      request_url_condition = optional(object({
+        operator   = string
+        values     = optional(list(string))
+        transforms = optional(list(string))
       }))
-      url_path_condition = optional(object({
-        operator         = string
-        negate_condition = bool
-        match_values     = list(string)
-        transforms       = optional(list(string))
+      request_path_condition = optional(object({
+        operator   = string
+        values     = optional(list(string))
+        transforms = optional(list(string))
       }))
     }))
   }))
