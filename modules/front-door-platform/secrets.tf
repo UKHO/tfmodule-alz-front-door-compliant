@@ -1,8 +1,15 @@
-# Secrets are Key Vault certificates imported into Front Door.
-# They appear under "Secrets" in the Azure Portal and are referenced
-# by custom domains that use a CustomerCertificate TLS type.
+# DEPRECATED: Customer-managed certificate support via Key Vault.
+# This file is retained for backward compatibility only.
 #
-# Prerequisites:
+# Default behavior: Azure Front Door uses AFD-managed certificates automatically.
+# All resources in this file are optional and only created when var.key_vault_name != null.
+#
+# Legacy use case: If you need customer-managed certificates, provide:
+#   - key_vault_name: Name of the Key Vault containing certificates
+#   - key_vault_resource_group_name: Resource group of the Key Vault
+#   - secrets: Map of certificates to import
+#
+# Prerequisites for customer-managed certificates:
 #   - The Front Door profile's system-assigned managed identity (created in
 #     frontdoor.tf) must have "Key Vault Secrets User" on the Key Vault,
 #     so Front Door can read the certificate. This is granted below.
