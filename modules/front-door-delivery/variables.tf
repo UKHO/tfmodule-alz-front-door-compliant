@@ -92,8 +92,8 @@ variable "custom_domains" {
     dns_zone_id = string
     host_name   = string
     tls = object({
-      certificate_type        = string
-      minimum_tls_version     = string
+      certificate_type        = optional(string, "ManagedCertificate")
+      minimum_tls_version     = optional(string, "TLS12")
       cdn_frontdoor_secret_id = optional(string)
     })
   }))

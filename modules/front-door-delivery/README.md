@@ -163,6 +163,62 @@ origins = {
 
 **Don't forget to approve the private endpoint connection!**
 
+## Custom Domain Certificate Examples
+
+### Using Managed Certificates (Default - Recommended)
+
+Azure Front Door automatically provisions and manages the SSL/TLS certificate for you:
+
+```hcl
+custom_domains = {
+  "my-domain" = {
+    name        = "my-domain"
+    dns_zone_id = "/subscriptions/..."
+    host_name   = "www.example.com"
+    tls         = {}  # Uses defaults: ManagedCertificate with TLS12
+  }
+}
+```
+
+**Benefits:**
+- No certificate management overhead
+- Automatic renewal
+- Free of charge
+- Suitable for most use cases
+
+### Using Customer Certificates
+
+For scenarios requiring your own certificate (e.g., Extended Validation certificates, specific CA requirements):
+
+```hcl
+custom_domains = {
+  "my-domain" = {
+    name        = "my-domain"
+    dns_zone_id = "/subscriptions/..."
+    host_name   = "www.example.com"
+    tls = {
+      certificate_type        = "CustomerCertificate"
+      cdn_frontdoor_secret_id = azurerm_cdn_frontdoor_secret.cert.id
+    }
+  }
+}
+```
+
+**Requirements:**
+- Certificate must be imported as a Front Door secret by platform team
+- Certificate must be in PFX format and stored in the spoke connect key vault
+- Front Door needs proper permissions to access the Key Vault
+- UKHO is responsible for certificate renewal and rotation
+
+**Note:** The `minimum_tls_version` defaults to `TLS12` for both certificate types. Override it if needed:
+
+```hcl
+tls = {
+  certificate_type    = "ManagedCertificate"
+  minimum_tls_version = "TLS13"  # Override default
+}
+```
+
 ## Troubleshooting
 
 ### "Front Door profile not found"
@@ -220,7 +276,7 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_custom_domains"></a> [custom\_domains](#input\_custom\_domains) | A map of custom domains for this team's applications. | <pre>map(object({<br/>    name        = string<br/>    dns_zone_id = string<br/>    host_name   = string<br/>    tls = object({<br/>      certificate_type        = string<br/>      minimum_tls_version     = string<br/>      cdn_frontdoor_secret_id = optional(string)<br/>    })<br/>  }))</pre> | `{}` | no |
+| <a name="input_custom_domains"></a> [custom\_domains](#input\_custom\_domains) | A map of custom domains for this team's applications. | <pre>map(object({<br/>    name        = string<br/>    dns_zone_id = string<br/>    host_name   = string<br/>    tls = object({<br/>      certificate_type        = optional(string, "ManagedCertificate")<br/>      minimum_tls_version     = optional(string, "TLS12")<br/>      cdn_frontdoor_secret_id = optional(string)<br/>    })<br/>  }))</pre> | `{}` | no |
 | <a name="input_front_door_profile_name"></a> [front\_door\_profile\_name](#input\_front\_door\_profile\_name) | The name of the existing Front Door profile created by platform team. | `string` | n/a | yes |
 | <a name="input_front_door_resource_group"></a> [front\_door\_resource\_group](#input\_front\_door\_resource\_group) | The resource group containing the Front Door profile. | `string` | n/a | yes |
 | <a name="input_origin_groups"></a> [origin\_groups](#input\_origin\_groups) | A map of origin groups for this team's applications. | <pre>map(object({<br/>    name                     = string<br/>    session_affinity_enabled = bool<br/>    load_balancing = object({<br/>      sample_size                        = number<br/>      successful_samples_required        = number<br/>      additional_latency_in_milliseconds = number<br/>    })<br/>    health_probe = optional(object({<br/>      protocol            = string<br/>      interval_in_seconds = number<br/>      request_type        = string<br/>      path                = string<br/>    }))<br/>  }))</pre> | n/a | yes |
