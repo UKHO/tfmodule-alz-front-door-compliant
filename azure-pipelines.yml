@@ -168,6 +168,11 @@ stages:
               scripts/Invoke-TfCompliance.ps1 `
                 -SubscriptionId "$(ARM_SUBSCRIPTION_ID)"
             displayName: "terraform compliance"
+            env:
+              # ARM_OIDC_TOKEN is a secret pipeline variable — Azure Pipelines does not
+              # auto-expose secret variables as environment variables to steps, so it must
+              # be mapped explicitly here or Terraform falls back to (unavailable) CLI auth.
+              ARM_OIDC_TOKEN: $(ARM_OIDC_TOKEN)
 
 # ─── Stage 2: Tag Release ─────────────────────────────────────────────────────
 
