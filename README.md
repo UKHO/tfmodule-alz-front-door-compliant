@@ -256,6 +256,15 @@ Each module has a `compliance/fixture/` directory:
 
 Variable values used during plan generation are stored in `compliance/compliance.tfvars` inside each module.
 
+### Running in the Azure Pipeline
+
+The `ComplianceTests` job in [`azure-pipelines.yml`](./azure-pipelines.yml) runs the same suites automatically, inside the `ukhydrographicoffice/terraform-test-toolset:latest` container. Two things differ from a local run:
+
+- **Authentication.** Although the fixtures never call real Azure APIs, the `azurerm` provider still performs an AAD token exchange and a `GetSubscription` lookup during `terraform plan`/`init`, so *some* valid identity is required even for a fully offline plan. The job authenticates via an `AzureCLI@2` step against the `Front Door Dev` Azure DevOps service connection, which uses Workload Identity Federation (OIDC) — no client secret is stored. `addSpnToEnvironment: true` exposes the federated token, which is mapped to `ARM_CLIENT_ID` / `ARM_TENANT_ID` / `ARM_OIDC_TOKEN` / `ARM_SUBSCRIPTION_ID` / `ARM_USE_OIDC=true` for the Terraform steps that follow. The SPN only needs **Reader** on the target subscription (Contributor is also fine); no RBAC role tied to Front Door itself is required, since nothing is ever applied.
+- **Pinned Terraform version.** The container image is published under a single mutable `:latest` tag and is rebuilt frequently with whatever Terraform release is newest at build time. `terraform-compliance` hardcodes the list of Terraform versions it recognises and rejects newer ones with `FATAL ERROR: Unsupported terraform version`. To avoid breaking on image drift, a pipeline step downloads a known-compatible Terraform version (currently `1.15.9`, set via the `ComplianceTerraformVersion` pipeline variable) and prepends it to `PATH` before the compliance run. Bump this variable only once `terraform-compliance` adds support for a newer Terraform minor version.
+
+Running the script locally does not require either of these — `Invoke-TfCompliance.ps1` falls back to synthetic offline credentials automatically when no real `ARM_*`/OIDC/MSI auth is present, and it uses whatever `terraform` binary is on your `PATH`.
+
 ---
 
 # Azure Front Door Compliant Terraform Module
