@@ -116,8 +116,28 @@ stages:
 
           # Keep this install until the container image is confirmed to include terraform-compliance.
           - pwsh: |
-              python -m pip install --upgrade pip
-              pip install terraform-compliance
+              if (Get-Command terraform-compliance -ErrorAction SilentlyContinue) {
+                Write-Host "terraform-compliance already available in PATH."
+                exit 0
+              }
+
+              if (Get-Command pip3 -ErrorAction SilentlyContinue) {
+                pip3 install terraform-compliance
+                exit $LASTEXITCODE
+              }
+
+              if (Get-Command python3 -ErrorAction SilentlyContinue) {
+                python3 -m pip install terraform-compliance
+                exit $LASTEXITCODE
+              }
+
+              if (Get-Command python -ErrorAction SilentlyContinue) {
+                python -m pip install terraform-compliance
+                exit $LASTEXITCODE
+              }
+
+              Write-Error "terraform-compliance not found, and no python/pip installer is available in this container image."
+              exit 1
             displayName: "Install terraform-compliance"
 
           - pwsh: |
