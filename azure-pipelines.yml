@@ -34,6 +34,12 @@ variables:
   - name: ComplianceServiceConnection
     value: "Front Door Dev"
 
+  # Latest terraform 1.15.x patch — the newest release still recognised by
+  # terraform-compliance's hardcoded supported-version check. Update only once
+  # terraform-compliance publishes support for a newer terraform minor version.
+  - name: ComplianceTerraformVersion
+    value: "1.15.9"
+
 stages:
 
 # ─── Stage 1: Validate ────────────────────────────────────────────────────────
@@ -117,6 +123,28 @@ stages:
         container: TerraformContainer
         steps:
           - checkout: self
+
+          # Pin the terraform binary used for compliance plan generation. TerraformContainer
+          # is built from a mutable :latest tag and tracks whatever terraform release is
+          # newest at build time. terraform-compliance hardcodes a list of terraform versions
+          # it recognises and rejects anything newer (e.g. "FATAL ERROR: Unsupported terraform
+          # version"), so we can't rely on the container's bundled version. Installing a known
+          # -compatible version here and prepending it to PATH makes this job resilient to
+          # image drift. Bump ComplianceTerraformVersion when terraform-compliance adds support
+          # for newer terraform releases.
+          - pwsh: |
+              $version = "$(ComplianceTerraformVersion)"
+              $installDir = "$(Agent.TempDirectory)/terraform-pinned"
+              New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+
+              $zipPath = Join-Path $installDir "terraform.zip"
+              Invoke-WebRequest -Uri "https://releases.hashicorp.com/terraform/$version/terraform_${version}_linux_amd64.zip" -OutFile $zipPath
+              Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
+              Remove-Item $zipPath
+
+              Write-Host "##vso[task.prependpath]$installDir"
+              Write-Host "Pinned terraform $version installed to $installDir"
+            displayName: "Pin terraform version for compliance plan generation"
 
           # Federate to the Front Door dev subscription using the SPN's workload identity
           # (no client secret involved). addSpnToEnvironment exposes servicePrincipalId,
