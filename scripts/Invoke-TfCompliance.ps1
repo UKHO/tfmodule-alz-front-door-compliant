@@ -80,6 +80,13 @@ try {
         $PlanBinary    = Join-Path $FixtureDir "tfplan"
         $PlanJsonPath  = Join-Path $FixtureDir $PlanFile
 
+        if (-not (Test-Path $VarFile)) {
+            Write-Host "$($module.Name): FAIL (variables file not found: $VarFile)" -ForegroundColor Red
+            $failedSuites += "$($module.Name)/varfile"
+            continue
+        }
+        $VarFile = Resolve-Path $VarFile
+
         Write-Host ""
         Write-Host "=====================================================================" -ForegroundColor Cyan
         Write-Host "  Module: $($module.Name)" -ForegroundColor Cyan

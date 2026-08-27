@@ -13,6 +13,10 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 
+# Keep compliance fixture tfvars under version control for CI policy tests
+!modules/front-door-platform/compliance/compliance.tfvars
+!modules/front-door-delivery/compliance/compliance.tfvars
+
 # Ignore override files
 override.tf
 override.tf.json
