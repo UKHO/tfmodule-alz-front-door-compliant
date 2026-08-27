@@ -55,8 +55,23 @@ else {
 }
 Write-Host "    Using terraform-compliance: $TerraformComplianceBin" -ForegroundColor Gray
 
-# Use Azure CLI credentials for plan generation
-$env:ARM_USE_CLI = "true"
+# Force non-CLI auth path so offline CI does not require `az login`.
+Remove-Item Env:ARM_USE_CLI -ErrorAction SilentlyContinue
+
+# Provide deterministic synthetic credentials for offline plan generation when
+# the pipeline/job has not supplied real ARM_* values.
+if ([string]::IsNullOrWhiteSpace($env:ARM_CLIENT_ID)) {
+    $env:ARM_CLIENT_ID = "00000000-0000-0000-0000-000000000000"
+}
+if ([string]::IsNullOrWhiteSpace($env:ARM_CLIENT_SECRET)) {
+    $env:ARM_CLIENT_SECRET = "offline-compliance-secret"
+}
+if ([string]::IsNullOrWhiteSpace($env:ARM_TENANT_ID)) {
+    $env:ARM_TENANT_ID = "00000000-0000-0000-0000-000000000000"
+}
+if ([string]::IsNullOrWhiteSpace($env:ARM_SUBSCRIPTION_ID)) {
+    $env:ARM_SUBSCRIPTION_ID = $SubscriptionId
+}
 
 $failedSuites = @()
 $passedSuites = @()

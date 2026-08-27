@@ -18,7 +18,7 @@ shared_endpoints = {
 }
 
 tags = {
-  environment  = "test"
-  "managed-by" = "platform"
+  environment   = "test"
+  "managed-by"  = "platform"
   "cost-centre" = "0000"
 }
