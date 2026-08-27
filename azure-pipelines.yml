@@ -114,6 +114,18 @@ stages:
         steps:
           - checkout: self
 
+          # TEMPORARY DEBUG: confirm whether az CLI is present in the container image.
+          # Remove this step once the auth mechanism decision (AzureCLI@2 vs OIDC-without-az) is made.
+          - pwsh: |
+              if (Get-Command az -ErrorAction SilentlyContinue) {
+                Write-Host "az CLI found:"
+                az version
+              }
+              else {
+                Write-Host "az CLI NOT found in this container image."
+              }
+            displayName: "DEBUG: check az CLI presence"
+
           # Keep this install until the container image is confirmed to include terraform-compliance.
           - pwsh: |
               if (Get-Command terraform-compliance -ErrorAction SilentlyContinue) {
