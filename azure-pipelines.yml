@@ -26,9 +26,13 @@ resources:
       image: ukhydrographicoffice/terraform-test-toolset:latest
 
 variables:
-  # Dummy subscription GUID for offline compliance plan generation in module CI.
-  - name: ComplianceSubscriptionId
-    value: "00000000-0000-0000-0000-000000000000"
+  # Service connection for the SPN (workload identity federation) used to authenticate
+  # Terraform against the Front Door dev subscription during compliance test plan generation.
+  # No RBAC roles specific to Front Door are required — Contributor on the dev subscription
+  # is sufficient, since the compliance job only ever runs `terraform plan` (never apply)
+  # against local-backend fixtures.
+  - name: ComplianceServiceConnection
+    value: "Front Door Dev"
 
 stages:
 
@@ -114,17 +118,25 @@ stages:
         steps:
           - checkout: self
 
-          # TEMPORARY DEBUG: confirm whether az CLI is present in the container image.
-          # Remove this step once the auth mechanism decision (AzureCLI@2 vs OIDC-without-az) is made.
-          - pwsh: |
-              if (Get-Command az -ErrorAction SilentlyContinue) {
-                Write-Host "az CLI found:"
-                az version
-              }
-              else {
-                Write-Host "az CLI NOT found in this container image."
-              }
-            displayName: "DEBUG: check az CLI presence"
+          # Federate to the Front Door dev subscription using the SPN's workload identity
+          # (no client secret involved). addSpnToEnvironment exposes servicePrincipalId,
+          # tenantId, and idToken for a WIF-based service connection; these are re-published
+          # as pipeline variables so later steps in this job see them as ARM_* env vars,
+          # which is what the azurerm Terraform provider expects for OIDC auth.
+          - task: AzureCLI@2
+            displayName: "Authenticate (OIDC) for compliance plan generation"
+            inputs:
+              azureSubscription: "$(ComplianceServiceConnection)"
+              scriptType: pscore
+              scriptLocation: inlineScript
+              addSpnToEnvironment: true
+              inlineScript: |
+                $subscriptionId = az account show --query id -o tsv
+                Write-Host "##vso[task.setvariable variable=ARM_CLIENT_ID]$env:servicePrincipalId"
+                Write-Host "##vso[task.setvariable variable=ARM_TENANT_ID]$env:tenantId"
+                Write-Host "##vso[task.setvariable variable=ARM_OIDC_TOKEN;issecret=true]$env:idToken"
+                Write-Host "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$subscriptionId"
+                Write-Host "##vso[task.setvariable variable=ARM_USE_OIDC]true"
 
           # Keep this install until the container image is confirmed to include terraform-compliance.
           - pwsh: |
@@ -154,7 +166,7 @@ stages:
 
           - pwsh: |
               scripts/Invoke-TfCompliance.ps1 `
-                -SubscriptionId "$(ComplianceSubscriptionId)"
+                -SubscriptionId "$(ARM_SUBSCRIPTION_ID)"
             displayName: "terraform compliance"
 
 # ─── Stage 2: Tag Release ─────────────────────────────────────────────────────

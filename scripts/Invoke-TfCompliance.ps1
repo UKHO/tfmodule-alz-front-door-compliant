@@ -58,16 +58,20 @@ Write-Host "    Using terraform-compliance: $TerraformComplianceBin" -Foreground
 # Force non-CLI auth path so offline CI does not require `az login`.
 Remove-Item Env:ARM_USE_CLI -ErrorAction SilentlyContinue
 
-# Provide deterministic synthetic credentials for offline plan generation when
-# the pipeline/job has not supplied real ARM_* values.
-if ([string]::IsNullOrWhiteSpace($env:ARM_CLIENT_ID)) {
-    $env:ARM_CLIENT_ID = "00000000-0000-0000-0000-000000000000"
-}
-if ([string]::IsNullOrWhiteSpace($env:ARM_CLIENT_SECRET)) {
+# Real auth (e.g. OIDC federation via a pipeline AzureCLI@2 step) is signalled by
+# ARM_CLIENT_ID and/or ARM_USE_OIDC/ARM_USE_MSI already being set. In that case, leave
+# every ARM_* value alone — injecting a synthetic ARM_CLIENT_SECRET alongside a real
+# OIDC token would create a conflicting auth configuration.
+$UsingRealAuth = (-not [string]::IsNullOrWhiteSpace($env:ARM_CLIENT_ID)) `
+    -or $env:ARM_USE_OIDC -eq "true" `
+    -or $env:ARM_USE_MSI -eq "true"
+
+if (-not $UsingRealAuth) {
+    # Provide deterministic synthetic credentials for fully offline plan generation
+    # (e.g. local dev runs) when no pipeline/job has supplied real ARM_* values.
+    $env:ARM_CLIENT_ID     = "00000000-0000-0000-0000-000000000000"
     $env:ARM_CLIENT_SECRET = "offline-compliance-secret"
-}
-if ([string]::IsNullOrWhiteSpace($env:ARM_TENANT_ID)) {
-    $env:ARM_TENANT_ID = "00000000-0000-0000-0000-000000000000"
+    $env:ARM_TENANT_ID     = "00000000-0000-0000-0000-000000000000"
 }
 if ([string]::IsNullOrWhiteSpace($env:ARM_SUBSCRIPTION_ID)) {
     $env:ARM_SUBSCRIPTION_ID = $SubscriptionId
