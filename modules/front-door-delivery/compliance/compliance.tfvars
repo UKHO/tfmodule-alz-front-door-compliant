@@ -54,7 +54,7 @@ custom_domains = {
     host_name   = "app.compliance.example.com"
     tls = {
       certificate_type    = "ManagedCertificate"
-      minimum_tls_version = "TLS12"
+      minimum_tls_version = "TLS11"
     }
   }
 }
