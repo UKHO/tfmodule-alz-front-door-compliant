@@ -5,7 +5,7 @@
 
 resource_group_name = "rg-frontdoor-platform-compliance"
 front_door_name     = "fdplatformcompliancetest"
-sku_name            = "Standard_AzureFrontDoor"
+sku_name            = "Premium_AzureFrontDoor"
 
 waf_policy_name = "wafplatformcompliancetest"
 waf_mode        = "Prevention"
