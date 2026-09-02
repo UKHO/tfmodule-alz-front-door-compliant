@@ -25,6 +25,21 @@ resources:
     - container: TerraformContainer
       image: ukhydrographicoffice/terraform-test-toolset:latest
 
+variables:
+  # Service connection for the SPN (workload identity federation) used to authenticate
+  # Terraform against the Front Door dev subscription during compliance test plan generation.
+  # No RBAC roles specific to Front Door are required — Contributor on the dev subscription
+  # is sufficient, since the compliance job only ever runs `terraform plan` (never apply)
+  # against local-backend fixtures.
+  - name: ComplianceServiceConnection
+    value: "Front Door Dev"
+
+  # Latest terraform 1.15.x patch — the newest release still recognised by
+  # terraform-compliance's hardcoded supported-version check. Update only once
+  # terraform-compliance publishes support for a newer terraform minor version.
+  - name: ComplianceTerraformVersion
+    value: "1.15.9"
+
 stages:
 
 # ─── Stage 1: Validate ────────────────────────────────────────────────────────
@@ -97,6 +112,95 @@ stages:
               monitorWhen: never
               severityThreshold: high
               targetFile: modules/front-door-delivery
+
+      # ── terraform-compliance against module fixtures ──
+
+      - job: ComplianceTests
+        displayName: "Compliance Tests (terraform-compliance)"
+        dependsOn: []
+        pool:
+          vmImage: ubuntu-latest
+        container: TerraformContainer
+        steps:
+          - checkout: self
+
+          # Pin the terraform binary used for compliance plan generation. TerraformContainer
+          # is built from a mutable :latest tag and tracks whatever terraform release is
+          # newest at build time. terraform-compliance hardcodes a list of terraform versions
+          # it recognises and rejects anything newer (e.g. "FATAL ERROR: Unsupported terraform
+          # version"), so we can't rely on the container's bundled version. Installing a known
+          # -compatible version here and prepending it to PATH makes this job resilient to
+          # image drift. Bump ComplianceTerraformVersion when terraform-compliance adds support
+          # for newer terraform releases.
+          - pwsh: |
+              $version = "$(ComplianceTerraformVersion)"
+              $installDir = "$(Agent.TempDirectory)/terraform-pinned"
+              New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+
+              $zipPath = Join-Path $installDir "terraform.zip"
+              Invoke-WebRequest -Uri "https://releases.hashicorp.com/terraform/$version/terraform_${version}_linux_amd64.zip" -OutFile $zipPath
+              Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
+              Remove-Item $zipPath
+
+              Write-Host "##vso[task.prependpath]$installDir"
+              Write-Host "Pinned terraform $version installed to $installDir"
+            displayName: "Pin terraform version for compliance plan generation"
+
+          # Federate to the Front Door dev subscription using the SPN's workload identity
+          # (no client secret involved). addSpnToEnvironment exposes servicePrincipalId,
+          # tenantId, and idToken for a WIF-based service connection; these are re-published
+          # as pipeline variables so later steps in this job see them as ARM_* env vars,
+          # which is what the azurerm Terraform provider expects for OIDC auth.
+          - task: AzureCLI@2
+            displayName: "Authenticate (OIDC) for compliance plan generation"
+            inputs:
+              azureSubscription: "$(ComplianceServiceConnection)"
+              scriptType: pscore
+              scriptLocation: inlineScript
+              addSpnToEnvironment: true
+              inlineScript: |
+                $subscriptionId = az account show --query id -o tsv
+                Write-Host "##vso[task.setvariable variable=ARM_CLIENT_ID]$env:servicePrincipalId"
+                Write-Host "##vso[task.setvariable variable=ARM_TENANT_ID]$env:tenantId"
+                Write-Host "##vso[task.setvariable variable=ARM_OIDC_TOKEN;issecret=true]$env:idToken"
+                Write-Host "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$subscriptionId"
+                Write-Host "##vso[task.setvariable variable=ARM_USE_OIDC]true"
+
+          # Keep this install until the container image is confirmed to include terraform-compliance.
+          - pwsh: |
+              if (Get-Command terraform-compliance -ErrorAction SilentlyContinue) {
+                Write-Host "terraform-compliance already available in PATH."
+                exit 0
+              }
+
+              if (Get-Command pip3 -ErrorAction SilentlyContinue) {
+                pip3 install terraform-compliance
+                exit $LASTEXITCODE
+              }
+
+              if (Get-Command python3 -ErrorAction SilentlyContinue) {
+                python3 -m pip install terraform-compliance
+                exit $LASTEXITCODE
+              }
+
+              if (Get-Command python -ErrorAction SilentlyContinue) {
+                python -m pip install terraform-compliance
+                exit $LASTEXITCODE
+              }
+
+              Write-Error "terraform-compliance not found, and no python/pip installer is available in this container image."
+              exit 1
+            displayName: "Install terraform-compliance"
+
+          - pwsh: |
+              scripts/Invoke-TfCompliance.ps1 `
+                -SubscriptionId "$(ARM_SUBSCRIPTION_ID)"
+            displayName: "terraform compliance"
+            env:
+              # ARM_OIDC_TOKEN is a secret pipeline variable — Azure Pipelines does not
+              # auto-expose secret variables as environment variables to steps, so it must
+              # be mapped explicitly here or Terraform falls back to (unavailable) CLI auth.
+              ARM_OIDC_TOKEN: $(ARM_OIDC_TOKEN)
 
 # ─── Stage 2: Tag Release ─────────────────────────────────────────────────────
 

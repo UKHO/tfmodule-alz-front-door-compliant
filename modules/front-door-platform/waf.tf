@@ -7,6 +7,7 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "this" {
   redirect_url                      = var.waf_redirect_url
   custom_block_response_status_code = var.waf_custom_block_response_status_code
   custom_block_response_body        = var.waf_custom_block_response_body
+  request_body_check_enabled        = true
 
   dynamic "custom_rule" {
     for_each = var.waf_custom_rules

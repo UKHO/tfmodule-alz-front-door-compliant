@@ -184,6 +184,89 @@ If you were using this module before the restructure, **do not delete the old fi
 - [Platform Module Documentation](./modules/front-door-platform/README.md)
 - [Delivery Module Documentation](./modules/front-door-delivery/README.md)
 
+---
+
+## BDD Compliance Testing
+
+Each module ships with a suite of [terraform-compliance](https://terraform-compliance.com/) BDD tests that assert policy controls against a `terraform plan` before any deployment. Tests run entirely offline — no Azure connection is needed.
+
+### Requirements
+
+| Tool | Version |
+|------|---------|
+| Terraform | `>= 1.7.0` |
+| terraform-compliance | `>= 1.3.0` (install via `pip`) |
+| Python | `>= 3.9` (for `pip install terraform-compliance`) |
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\pip install terraform-compliance
+```
+
+### Running the Tests
+
+Use the provided runner script, passing your Azure subscription ID (used only to satisfy the `azurerm` provider schema during `terraform plan`; no resources are deployed):
+
+```powershell
+.\scripts\Invoke-TfCompliance.ps1 -SubscriptionId "<your-subscription-id>"
+```
+
+The script loops over both modules, generates a plan JSON for each, and runs every compliance suite against it. On failure it prints the failing scenario and exits with a non-zero code.
+
+### Test Suites
+
+#### `modules/front-door-platform`
+
+| Suite directory | Feature file | Control type |
+|---|---|---|
+| `sku_enforcement` | `premium_sku.feature` | Additive guardrail |
+| `enforce_guardrails_network` | `waf_enabled.feature` | ALZ DENY policy `055aa869` |
+| `enforce_guardrails_network` | `waf_mode_prevention.feature` | ALZ DENY policy `425bea59` |
+| `enforce_guardrails_network` | `waf_managed_rules.feature` | ALZ DENY policy `632d3993` |
+| `enforce_guardrails_network` | `waf_request_body_inspection.feature` | Additive guardrail |
+| `tagging_requirements` | `required_tags.feature` | Additive guardrail |
+
+#### `modules/front-door-delivery`
+
+| Suite directory | Feature file | Control type |
+|---|---|---|
+| `https_enforcement` | `https_redirect.feature` | Additive guardrail |
+| `https_enforcement` | `forwarding_protocol.feature` | Additive guardrail |
+| `tls_enforcement` | `minimum_tls_version.feature` | Additive guardrail (Azure Security Benchmark) |
+| `origin_security` | `certificate_name_check.feature` | Additive guardrail |
+
+### ALZ Policy Alignment
+
+Controls marked **ALZ DENY policy** mirror policies in the **Enforce-Guardrails-Network** Azure Landing Zone initiative. A deployment that fails these tests would also be blocked by Azure Policy in a compliant ALZ subscription.
+
+Controls marked **Additive guardrail** are not enforced as DENY policies in the core ALZ initiative. They represent org-level best practices or Azure Security Benchmark audit recommendations that we enforce pre-flight to prevent post-deployment Defender for Cloud findings.
+
+| Policy definition ID | Display name | Initiative |
+|---|---|---|
+| `055aa869-bc98-4af8-bafc-23f1ab6ffe2c` | Deny-Waf-Afd-Enabled | Enforce-Guardrails-Network |
+| `425bea59-a659-4cbb-8d31-34499bd030b8` | Deny-Waf-mode | Enforce-Guardrails-Network |
+| `632d3993-e2c0-44ea-a7db-2eca131f356d` | Deny-Waf-Fw-rules | Enforce-Guardrails-Network |
+
+### Fixture Approach
+
+Each module has a `compliance/fixture/` directory:
+
+- **`front-door-platform/compliance/fixture/`** — A minimal root module that calls `../../` (the platform module). No data sources are required; plan generation works entirely offline.
+- **`front-door-delivery/compliance/fixture/`** — Replicates all delivery module resources inline using stub resource IDs to replace the `data.tf` lookups that would normally reference a live Front Door profile. This avoids any Azure connectivity during plan generation. **Note:** if the delivery module resources change, the fixture must be updated to match.
+
+Variable values used during plan generation are stored in `compliance/compliance.tfvars` inside each module.
+
+### Running in the Azure Pipeline
+
+The `ComplianceTests` job in [`azure-pipelines.yml`](./azure-pipelines.yml) runs the same suites automatically, inside the `ukhydrographicoffice/terraform-test-toolset:latest` container. Two things differ from a local run:
+
+- **Authentication.** Although the fixtures never call real Azure APIs, the `azurerm` provider still performs an AAD token exchange and a `GetSubscription` lookup during `terraform plan`/`init`, so *some* valid identity is required even for a fully offline plan. The job authenticates via an `AzureCLI@2` step against the `Front Door Dev` Azure DevOps service connection, which uses Workload Identity Federation (OIDC) — no client secret is stored. `addSpnToEnvironment: true` exposes the federated token, which is mapped to `ARM_CLIENT_ID` / `ARM_TENANT_ID` / `ARM_OIDC_TOKEN` / `ARM_SUBSCRIPTION_ID` / `ARM_USE_OIDC=true` for the Terraform steps that follow. The SPN only needs **Reader** on the target subscription (Contributor is also fine); no RBAC role tied to Front Door itself is required, since nothing is ever applied.
+- **Pinned Terraform version.** The container image is published under a single mutable `:latest` tag and is rebuilt frequently with whatever Terraform release is newest at build time. `terraform-compliance` hardcodes the list of Terraform versions it recognises and rejects newer ones with `FATAL ERROR: Unsupported terraform version`. To avoid breaking on image drift, a pipeline step downloads a known-compatible Terraform version (currently `1.15.9`, set via the `ComplianceTerraformVersion` pipeline variable) and prepends it to `PATH` before the compliance run. Bump this variable only once `terraform-compliance` adds support for a newer Terraform minor version.
+
+Running the script locally does not require either of these — `Invoke-TfCompliance.ps1` falls back to synthetic offline credentials automatically when no real `ARM_*`/OIDC/MSI auth is present, and it uses whatever `terraform` binary is on your `PATH`.
+
+---
+
 # Azure Front Door Compliant Terraform Module
 
 This Terraform module creates and manages an Azure Front Door (Standard or Premium) instance with Web Application Firewall (WAF) enabled, ensuring compliance with security policies.
