@@ -9,6 +9,7 @@ trigger:
       - modules/**
       - scripts/**
       - examples/**
+      - tests/**
 
 pr:
   branches:
@@ -19,6 +20,7 @@ pr:
       - modules/**
       - scripts/**
       - examples/**
+      - tests/**
 
 resources:
   containers:
@@ -218,7 +220,7 @@ stages:
       # collisions, no patterns_to_match/custom-domain overlap on the shared endpoint,
       # and each route resolves only to its own origins).
       # Runs real terraform apply/destroy against the Front Door Dev subscription, so
-      # it's scoped to only run when modules/front-door-delivery/** actually changed.
+      # it's scoped to only run when modules/front-door-delivery/** or tests/** actually changed.
 
       - job: DeliveryOverlapTests
         displayName: "Delivery Module Overlap Tests (terraform test, apply)"
@@ -235,13 +237,13 @@ stages:
               if ($env:BUILD_REASON -eq "PullRequest") {
                 $targetBranch = "$(System.PullRequest.TargetBranchName)"
                 git fetch origin $targetBranch --depth=50 2>$null
-                $diff = git diff --name-only "origin/$targetBranch...HEAD" -- modules/front-door-delivery
+                $diff = git diff --name-only "origin/$targetBranch...HEAD" -- modules/front-door-delivery tests
               }
               else {
-                $diff = git diff --name-only HEAD~1 HEAD -- modules/front-door-delivery 2>$null
+                $diff = git diff --name-only HEAD~1 HEAD -- modules/front-door-delivery tests 2>$null
               }
               if ($diff) { $changed = $true }
-              Write-Host "front-door-delivery changed: $changed"
+              Write-Host "front-door-delivery or tests changed: $changed"
               Write-Host "##vso[task.setvariable variable=DeliveryChanged]$changed"
             displayName: "Detect front-door-delivery module changes"
 
