@@ -28,7 +28,7 @@ module "front_door_platform" {
 
   front_door_name     = "fd-privatelink-example"
   resource_group_name = azurerm_resource_group.example.name
-  sku_name            = "Premium_AzureFrontDoor"  # Required for Private Link
+  sku_name            = "Premium_AzureFrontDoor" # Required for Private Link
   waf_policy_name     = "wafprivatelink"
   waf_mode            = "Prevention"
 
@@ -105,7 +105,7 @@ module "team_private_routes" {
       forwarding_protocol    = "HttpsOnly"
       https_redirect_enabled = true
       patterns_to_match      = ["/*"]
-      supported_protocols    = ["Https"]
+      supported_protocols    = ["Http", "Https"]
       link_to_default_domain = true
       cache = {
         query_string_caching_behavior = "IgnoreQueryString"
