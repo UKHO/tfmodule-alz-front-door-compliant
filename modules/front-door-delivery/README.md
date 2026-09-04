@@ -73,7 +73,7 @@ module "team_a_routes" {
       forwarding_protocol    = "HttpsOnly"
       https_redirect_enabled = true
       patterns_to_match      = ["/team-a/*"]  # Your team's path
-      supported_protocols    = ["Https"]
+      supported_protocols    = ["Http", "Https"]  # Http required alongside Https when https_redirect_enabled = true
       link_to_default_domain = true
       cache = {
         query_string_caching_behavior = "IgnoreQueryString"
@@ -240,7 +240,7 @@ For questions contact:
 - Your team lead
 - Platform team: platform-team@company.com
 
-<!-- Last regenerated: 2026-07-06 -->
+<!-- Last regenerated: 2026-09-04 -->
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
@@ -290,10 +290,18 @@ No modules.
 
 | Name | Description |
 |------|-------------|
+| <a name="output_custom_domain_host_names"></a> [custom\_domain\_host\_names](#output\_custom\_domain\_host\_names) | A map of custom domain host names, as created on the shared profile. |
 | <a name="output_custom_domain_ids"></a> [custom\_domain\_ids](#output\_custom\_domain\_ids) | A map of custom domain IDs. |
+| <a name="output_custom_domain_names"></a> [custom\_domain\_names](#output\_custom\_domain\_names) | A map of custom domain names, as created on the shared profile. |
 | <a name="output_custom_domain_validation_tokens"></a> [custom\_domain\_validation\_tokens](#output\_custom\_domain\_validation\_tokens) | A map of custom domain validation tokens for DNS verification. |
 | <a name="output_origin_group_ids"></a> [origin\_group\_ids](#output\_origin\_group\_ids) | A map of origin group IDs. |
+| <a name="output_origin_group_names"></a> [origin\_group\_names](#output\_origin\_group\_names) | A map of origin group names, as created on the shared profile. |
 | <a name="output_origin_ids"></a> [origin\_ids](#output\_origin\_ids) | A map of origin IDs. |
+| <a name="output_origin_names"></a> [origin\_names](#output\_origin\_names) | A map of origin names, as created on the shared profile. |
 | <a name="output_route_ids"></a> [route\_ids](#output\_route\_ids) | A map of route IDs. |
+| <a name="output_route_names"></a> [route\_names](#output\_route\_names) | A map of route names, as created on the shared endpoint. |
+| <a name="output_route_origin_ids"></a> [route\_origin\_ids](#output\_route\_origin\_ids) | A map of each route's resolved origin IDs (cdn\_frontdoor\_origin\_ids). |
+| <a name="output_route_patterns_to_match"></a> [route\_patterns\_to\_match](#output\_route\_patterns\_to\_match) | A map of each route's patterns\_to\_match, as created on the shared endpoint. |
 | <a name="output_rule_set_ids"></a> [rule\_set\_ids](#output\_rule\_set\_ids) | A map of rule set IDs. |
+| <a name="output_rule_set_names"></a> [rule\_set\_names](#output\_rule\_set\_names) | A map of rule set names, as created on the shared profile. |
 <!-- END_TF_DOCS -->
