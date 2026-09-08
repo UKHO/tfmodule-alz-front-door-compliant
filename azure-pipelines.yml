@@ -9,6 +9,7 @@ trigger:
       - modules/**
       - scripts/**
       - examples/**
+      - tests/**
 
 pr:
   branches:
@@ -19,6 +20,7 @@ pr:
       - modules/**
       - scripts/**
       - examples/**
+      - tests/**
 
 resources:
   containers:
@@ -32,6 +34,15 @@ variables:
   # is sufficient, since the compliance job only ever runs `terraform plan` (never apply)
   # against local-backend fixtures.
   - name: ComplianceServiceConnection
+    value: "Front Door Dev"
+
+  # Service connection for the SPN used to authenticate Terraform against the Front Door
+  # Dev subscription for the delivery module overlap tests. Unlike ComplianceServiceConnection,
+  # this job runs real `terraform apply`/`destroy` against live Azure resources, so the SPN
+  # needs Contributor (or higher) on the subscription. The subscription ID itself is inferred
+  # at runtime from the authenticated service connection context (see "Authenticate (OIDC) for
+  # overlap tests" step below) rather than hardcoded here.
+  - name: OverlapTestServiceConnection
     value: "Front Door Dev"
 
   # Latest terraform 1.15.x patch — the newest release still recognised by
@@ -196,6 +207,72 @@ stages:
               scripts/Invoke-TfCompliance.ps1 `
                 -SubscriptionId "$(ARM_SUBSCRIPTION_ID)"
             displayName: "terraform compliance"
+            env:
+              # ARM_OIDC_TOKEN is a secret pipeline variable — Azure Pipelines does not
+              # auto-expose secret variables as environment variables to steps, so it must
+              # be mapped explicitly here or Terraform falls back to (unavailable) CLI auth.
+              ARM_OIDC_TOKEN: $(ARM_OIDC_TOKEN)
+
+      # ── Delivery module overlap tests (native terraform test, apply mode) ──
+      # Stands up two front-door-delivery instances against a shared platform profile/
+      # endpoint (see tests/) and asserts neither can affect or override the other's
+      # routes, origins, origin groups, rule sets or custom domains (no resource-name
+      # collisions, no patterns_to_match/custom-domain overlap on the shared endpoint,
+      # and each route resolves only to its own origins).
+      # Runs real terraform apply/destroy against the Front Door Dev subscription, so
+      # it's scoped to only run when modules/front-door-delivery/** or tests/** actually changed.
+
+      - job: DeliveryOverlapTests
+        displayName: "Delivery Module Overlap Tests (terraform test, apply)"
+        dependsOn: []
+        pool:
+          vmImage: ubuntu-latest
+        container: TerraformContainer
+        steps:
+          - checkout: self
+            fetchDepth: 0
+
+          - pwsh: |
+              $changed = $false
+              if ($env:BUILD_REASON -eq "PullRequest") {
+                $targetBranch = "$(System.PullRequest.TargetBranchName)"
+                git fetch origin $targetBranch --depth=50 2>$null
+                $diff = git diff --name-only "origin/$targetBranch...HEAD" -- modules/front-door-delivery tests
+              }
+              else {
+                $diff = git diff --name-only HEAD~1 HEAD -- modules/front-door-delivery tests 2>$null
+              }
+              if ($diff) { $changed = $true }
+              Write-Host "front-door-delivery or tests changed: $changed"
+              Write-Host "##vso[task.setvariable variable=DeliveryChanged]$changed"
+            displayName: "Detect front-door-delivery module changes"
+
+          # Federate to the Front Door Dev subscription using the SPN's workload identity
+          # (no client secret involved) — same mechanism as the compliance job's OIDC step,
+          # but this SPN needs write (Contributor+) RBAC since this job runs real apply/destroy.
+          # Subscription ID is read from the authenticated context (az account show), not
+          # hardcoded, matching the ComplianceTests job's pattern above.
+          - task: AzureCLI@2
+            displayName: "Authenticate (OIDC) for overlap tests"
+            condition: and(succeeded(), eq(variables['DeliveryChanged'], 'true'))
+            inputs:
+              azureSubscription: "$(OverlapTestServiceConnection)"
+              scriptType: pscore
+              scriptLocation: inlineScript
+              addSpnToEnvironment: true
+              inlineScript: |
+                $subscriptionId = az account show --query id -o tsv
+                Write-Host "##vso[task.setvariable variable=ARM_CLIENT_ID]$env:servicePrincipalId"
+                Write-Host "##vso[task.setvariable variable=ARM_TENANT_ID]$env:tenantId"
+                Write-Host "##vso[task.setvariable variable=ARM_OIDC_TOKEN;issecret=true]$env:idToken"
+                Write-Host "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$subscriptionId"
+                Write-Host "##vso[task.setvariable variable=ARM_USE_OIDC]true"
+
+          - pwsh: |
+              scripts/Invoke-DeliveryOverlapTests.ps1 `
+                -SubscriptionId "$(ARM_SUBSCRIPTION_ID)"
+            displayName: "Delivery overlap tests"
+            condition: and(succeeded(), eq(variables['DeliveryChanged'], 'true'))
             env:
               # ARM_OIDC_TOKEN is a secret pipeline variable — Azure Pipelines does not
               # auto-expose secret variables as environment variables to steps, so it must

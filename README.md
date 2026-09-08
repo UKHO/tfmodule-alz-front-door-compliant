@@ -68,15 +68,29 @@ tfmodule-alz-front-door-compliant/
 │       ├── outputs.tf
 │       └── README.md
 │
-└── examples/
-    ├── platform-deployment/    # Platform team example ✅
-    │   ├── main.tf
-    │   └── README.md
-    ├── team-deployment/        # Delivery team example ✅
-    │   ├── main.tf
-    │   └── README.md
-    └── private-link/           # Private Link example ✅
-        └── main.tf
+├── examples/
+│   ├── platform-deployment/    # Platform team example ✅
+│   │   ├── main.tf
+│   │   └── README.md
+│   ├── team-deployment/        # Delivery team example ✅
+│   │   ├── main.tf
+│   │   └── README.md
+│   └── private-link/           # Private Link example ✅
+│       └── main.tf
+│
+├── scripts/                     # CI/local test & lint runner scripts
+│   ├── Invoke-TfCompliance.ps1
+│   ├── Invoke-DeliveryOverlapTests.ps1
+│   ├── Invoke-TfFmt.ps1
+│   ├── Invoke-TfLint.ps1
+│   ├── Invoke-TfValidate.ps1
+│   └── Invoke-TfDocs.ps1
+│
+└── tests/                        # Delivery module overlap tests (apply-mode, see below)
+    ├── main.tf
+    ├── fixture/                 # Shared platform prerequisites
+    └── apply/
+        └── delivery_overlap_apply.tftest.hcl
 ```
 
 ## Quick Start
@@ -264,6 +278,52 @@ The `ComplianceTests` job in [`azure-pipelines.yml`](./azure-pipelines.yml) runs
 - **Pinned Terraform version.** The container image is published under a single mutable `:latest` tag and is rebuilt frequently with whatever Terraform release is newest at build time. `terraform-compliance` hardcodes the list of Terraform versions it recognises and rejects newer ones with `FATAL ERROR: Unsupported terraform version`. To avoid breaking on image drift, a pipeline step downloads a known-compatible Terraform version (currently `1.15.9`, set via the `ComplianceTerraformVersion` pipeline variable) and prepends it to `PATH` before the compliance run. Bump this variable only once `terraform-compliance` adds support for a newer Terraform minor version.
 
 Running the script locally does not require either of these — `Invoke-TfCompliance.ps1` falls back to synthetic offline credentials automatically when no real `ARM_*`/OIDC/MSI auth is present, and it uses whatever `terraform` binary is on your `PATH`.
+
+---
+
+## Delivery Module Overlap Tests
+
+Unlike the offline BDD compliance suites above, `tests/apply/delivery_overlap_apply.tftest.hcl` is a native Terraform test (`terraform test`, `command = apply`) that deploys **real infrastructure** against a live Azure subscription. It stands up two independent instances of `modules/front-door-delivery` (`delivery_team_a` and `delivery_team_b`) against the **same shared** Front Door profile/endpoint, then asserts that neither instance's routes, origins, origin groups, rule sets, or custom domains can affect or override the other's — i.e. two delivery teams sharing one platform can never collide.
+
+### What Gets Tested
+
+- No resource-name collisions between the two instances' origin groups, origins, routes, rule sets, or custom domains.
+- No `patterns_to_match` overlap between the two teams' routes on the shared endpoint.
+- No custom-domain host-name overlap between the two teams.
+- Each team's route resolves **only** to that team's own origin(s) — never the other team's.
+
+### Repository Layout
+
+```
+tests/
+├── main.tf              # Harness: declares delivery_team_a + delivery_team_b module instances
+├── variables.tf         # Runtime variables (populated from the fixture's outputs)
+├── outputs.tf
+├── providers.tf
+├── fixture/             # Shared platform prerequisites (RG, DNS zone, Front Door profile+endpoint)
+└── apply/
+    └── delivery_overlap_apply.tftest.hcl   # The actual overlap assertions (command = apply)
+```
+
+### Running Locally
+
+```powershell
+.\scripts\Invoke-DeliveryOverlapTests.ps1 -SubscriptionId "<your-subscription-id>"
+```
+
+This script performs a two-phase run and **guarantees teardown** even on failure:
+
+1. **Phase 1** — `terraform apply`s `tests/fixture/` to stand up a throwaway shared platform (Front Door profile + endpoint + DNS zone, uniquified with a `random_string` suffix), then writes the fixture's outputs to `overlap_runtime.tfvars`.
+2. **Phase 2** — runs `terraform test -test-directory="apply" -var-file="overlap_runtime.tfvars"` from `tests/`, which applies both delivery-module instances against the shared fixture, runs all assertions, then auto-destroys the harness resources as part of the test's own teardown.
+3. **Always** (`finally` block) — destroys the Phase 1 fixture, whether or not Phase 1 or Phase 2 succeeded, so no Azure resources are left behind on a failed run.
+
+> **Note:** destroying the shared `azurerm_cdn_frontdoor_profile` typically takes ~15-18 minutes — this is normal Azure API behaviour, not a stuck script.
+
+### Running in the Azure Pipeline
+
+The `DeliveryOverlapTests` job in [`azure-pipelines.yml`](./azure-pipelines.yml) (Stage 1: Validate) runs the same script automatically, but only when `modules/front-door-delivery/**` or `tests/**` has actually changed (detected via a `git diff` step against the target/previous commit) — since this job performs real apply/destroy against Azure, it's skipped for unrelated changes to save time and cost. Note that the pipeline's own trigger/PR path filters also include `tests/**`, so a change scoped only to the test suite still runs the pipeline (and this job) at all. It authenticates via the `Front Door Dev` service connection (`OverlapTestServiceConnection` variable) using Workload Identity Federation (OIDC), the same pattern as the compliance job, except the SPN needs **Contributor** (not just Reader) on the subscription since real resources are created/destroyed.
+
+Stage 2 (`TagRelease`) declares `dependsOn: Validate`, so a failure in `DeliveryOverlapTests` — or `ComplianceTests`, or any other Stage 1 job — blocks the release tag from ever being created.
 
 ---
 
@@ -622,7 +682,7 @@ module "front_door_private_link" {
       forwarding_protocol    = "HttpsOnly"
       https_redirect_enabled = true
       patterns_to_match      = ["/*"]
-      supported_protocols    = ["Https"]
+      supported_protocols    = ["Http", "Https"]
       link_to_default_domain = true
       cache = {
         query_string_caching_behavior = "IgnoreQueryString"

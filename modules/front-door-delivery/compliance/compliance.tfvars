@@ -41,7 +41,7 @@ routes = {
     forwarding_protocol    = "HttpsOnly"
     https_redirect_enabled = true
     patterns_to_match      = ["/*"]
-    supported_protocols    = ["Https"]
+    supported_protocols    = ["Http", "Https"]
     link_to_default_domain = true
     custom_domain_keys     = ["default"]
   }

@@ -23,4 +23,19 @@ resource "azurerm_cdn_frontdoor_route" "this" {
       content_types_to_compress     = cache.value.content_types_to_compress
     }
   }
+
+  lifecycle {
+    # Guard against this team's own routes overlapping each other (pure
+    # config check, no live Azure lookup needed).
+    precondition {
+      condition = length(setintersection(
+        toset(each.value.patterns_to_match),
+        toset(flatten([
+          for key, route in var.routes : route.patterns_to_match
+          if key != each.key
+        ]))
+      )) == 0
+      error_message = "Route '${each.value.name}' has patterns_to_match that overlap another route defined in this same module call. Routes: ${join(", ", [for key, route in var.routes : route.name])}."
+    }
+  }
 }

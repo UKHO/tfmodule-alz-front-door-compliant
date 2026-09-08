@@ -52,9 +52,9 @@ module "team_a_routes" {
 
   # Reference platform-deployed resources
   # UPDATE THESE VALUES to match your platform deployment:
-  front_door_profile_name   = "company-frontdoor"       # From platform output
-  front_door_resource_group = "rg-platform-networking"  # From platform output
-  shared_endpoint_name      = "shared-endpoint"         # From platform output
+  front_door_profile_name   = "company-frontdoor"      # From platform output
+  front_door_resource_group = "rg-platform-networking" # From platform output
+  shared_endpoint_name      = "shared-endpoint"        # From platform output
 
   origin_groups = {
     team_a_apps = {
@@ -98,7 +98,7 @@ module "team_a_routes" {
       forwarding_protocol    = "HttpsOnly"
       https_redirect_enabled = true
       patterns_to_match      = ["/team-a/*", "/api/team-a/*"]
-      supported_protocols    = ["Https"]
+      supported_protocols    = ["Http", "Https"]
       link_to_default_domain = true
       cache = {
         query_string_caching_behavior = "IgnoreQueryString"
