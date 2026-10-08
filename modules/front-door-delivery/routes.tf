@@ -1,8 +1,6 @@
 locals {
-  # The set of domains each route is actually reachable on: the shared default
-  # domain (if linked) plus any custom domain keys. Two routes only conflict
-  # when they share BOTH a domain and an overlapping pattern — different
-  # custom domains can safely reuse the same pattern (e.g. "/*" on each).
+  # Domains each route is reachable on, so the overlap check below can tell
+  # routes on different domains apart (they can safely share a pattern).
   route_domain_keys = {
     for key, route in var.routes : key => toset(concat(
       route.link_to_default_domain ? ["__default_domain__"] : [],
