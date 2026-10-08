@@ -231,8 +231,8 @@ tls = {
 - Ask platform team for correct endpoint name
 
 ### Route conflicts
-- Ensure your `patterns_to_match` don't overlap with other teams
-- Use team-specific paths: `/team-name/*`
+- Routes only conflict if they share a target domain (the shared default domain and/or the same custom domain) **and** an overlapping pattern — routes on different custom domains can reuse the same pattern (e.g. `/*`)
+- If routing on the shared default domain, ensure your `patterns_to_match` don't overlap with other teams — use team-specific paths: `/team-name/*`
 
 ## Support
 
